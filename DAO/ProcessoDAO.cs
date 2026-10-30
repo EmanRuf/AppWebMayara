@@ -1,4 +1,5 @@
-﻿using AppWebMayara.Configs;
+﻿
+using AppWebMayara.Configs;
 using AppWebMayara.Model;
 using MySql.Data.MySqlClient;
 
@@ -13,29 +14,35 @@ namespace AppWebMayara.DAO
             _conexao = conexao;
         }
 
+        // Listar todos os processos
         public List<Processo> Listar()
         {
             var lista = new List<Processo>();
 
-            var comando = _conexao.CreateCommand(
-                "SELECT * FROM processos;"
-            );
+            using var con = _conexao.GetConnection();
 
-            var leitor =
-                (MySqlDataReader)comando.ExecuteReader();
+            string sql = @"
+                SELECT id_pro, numero_pro, data_pro,
+                       interessado_pro, assunto_pro,
+                       descricao_pro, situacao_pro
+                FROM processos
+                ORDER BY id_pro DESC";
+
+            using var comando = con.CreateCommand();
+            comando.CommandText = sql;
+
+            using var leitor = (MySqlDataReader)comando.ExecuteReader();
 
             while (leitor.Read())
             {
                 lista.Add(MapearProcesso(leitor));
             }
 
-            leitor.Close();
-
             return lista;
         }
 
-        private static Processo MapearProcesso(
-            MySqlDataReader leitor)
+        // Mapear os dados do banco para o modelo Processo
+        private static Processo MapearProcesso(MySqlDataReader leitor)
         {
             return new Processo
             {
@@ -76,74 +83,153 @@ namespace AppWebMayara.DAO
             };
         }
 
+        // Cadastrar um novo processo
         public void Inserir(Processo processo)
         {
-            try
+            using var con = _conexao.GetConnection();
+
+            string sql = @"
+                INSERT INTO processos
+                (
+                    numero_pro,
+                    data_pro,
+                    interessado_pro,
+                    assunto_pro,
+                    descricao_pro,
+                    situacao_pro
+                )
+                VALUES
+                (
+                    @numero,
+                    @data,
+                    @interessado,
+                    @assunto,
+                    @descricao,
+                    @situacao
+                )";
+
+            using var comando = con.CreateCommand();
+            comando.CommandText = sql;
+
+            comando.Parameters.AddWithValue(
+                "@numero",
+                processo.Numero
+            );
+
+            comando.Parameters.AddWithValue(
+                "@data",
+                processo.Data.HasValue
+                    ? processo.Data.Value.ToDateTime(TimeOnly.MinValue)
+                    : DBNull.Value
+            );
+
+            comando.Parameters.AddWithValue(
+                "@interessado",
+                processo.Interessado
+            );
+
+            comando.Parameters.AddWithValue(
+                "@assunto",
+                processo.Assunto
+            );
+
+            comando.Parameters.AddWithValue(
+                "@descricao",
+                (object?)processo.Descricao ?? DBNull.Value
+            );
+
+            comando.Parameters.AddWithValue(
+                "@situacao",
+                processo.Situacao
+            );
+
+            comando.ExecuteNonQuery();
+        }
+
+        // Buscar um processo pelo ID para editar
+        public Processo? ObterPorId(int id)
+        {
+            using var con = _conexao.GetConnection();
+
+            string sql = @"
+                SELECT id_pro, numero_pro, data_pro,
+                       interessado_pro, assunto_pro,
+                       descricao_pro, situacao_pro
+                FROM processos
+                WHERE id_pro = @id";
+
+            using var comando = con.CreateCommand();
+            comando.CommandText = sql;
+
+            comando.Parameters.AddWithValue("@id", id);
+
+            using var leitor = (MySqlDataReader)comando.ExecuteReader();
+
+            if (!leitor.Read())
             {
-                using var con = _conexao.GetConnection();
-
-                string sql = @"
-                    INSERT INTO processos
-                    (
-                        numero_pro,
-                        data_pro,
-                        interessado_pro,
-                        assunto_pro,
-                        descricao_pro,
-                        situacao_pro
-                    )
-                    VALUES
-                    (
-                        @numero,
-                        @data,
-                        @interessado,
-                        @assunto,
-                        @descricao,
-                        @situacao
-                    )";
-
-                using var comando = con.CreateCommand();
-
-                comando.CommandText = sql;
-
-                comando.Parameters.AddWithValue(
-                    "@numero",
-                    processo.Numero
-                );
-
-                comando.Parameters.AddWithValue(
-                    "@data",
-                    processo.Data!.Value.ToDateTime(
-                        TimeOnly.MinValue
-                    )
-                );
-
-                comando.Parameters.AddWithValue(
-                    "@interessado",
-                    processo.Interessado
-                );
-
-                comando.Parameters.AddWithValue(
-                    "@assunto",
-                    processo.Assunto
-                );
-
-                comando.Parameters.AddWithValue(
-                    "@descricao",
-                    processo.Descricao
-                );
-
-                comando.Parameters.AddWithValue(
-                    "@situacao",
-                    processo.Situacao
-                );
-
-                comando.ExecuteNonQuery();
+                return null;
             }
-            catch
-            {
-                throw;
-            }
+
+            return MapearProcesso(leitor);
+        }
+
+        // Atualizar um processo existente
+        public void Atualizar(Processo processo)
+        {
+            using var con = _conexao.GetConnection();
+
+            string sql = @"
+                UPDATE processos
+                SET
+                    numero_pro = @numero,
+                    data_pro = @data,
+                    interessado_pro = @interessado,
+                    assunto_pro = @assunto,
+                    descricao_pro = @descricao,
+                    situacao_pro = @situacao
+                WHERE id_pro = @id";
+
+            using var comando = con.CreateCommand();
+            comando.CommandText = sql;
+
+            comando.Parameters.AddWithValue(
+                "@numero",
+                processo.Numero
+            );
+
+            comando.Parameters.AddWithValue(
+                "@data",
+                processo.Data.HasValue
+                    ? processo.Data.Value.ToDateTime(TimeOnly.MinValue)
+                    : DBNull.Value
+            );
+
+            comando.Parameters.AddWithValue(
+                "@interessado",
+                processo.Interessado
+            );
+
+            comando.Parameters.AddWithValue(
+                "@assunto",
+                processo.Assunto
+            );
+
+            comando.Parameters.AddWithValue(
+                "@descricao",
+                (object?)processo.Descricao ?? DBNull.Value
+            );
+
+            comando.Parameters.AddWithValue(
+                "@situacao",
+                processo.Situacao
+            );
+
+            comando.Parameters.AddWithValue(
+                "@id",
+                processo.Id
+            );
+
+            comando.ExecuteNonQuery();
         }
     }
 }
